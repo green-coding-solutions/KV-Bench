@@ -1,0 +1,119 @@
+services:
+  redis:
+    image: redis:8.2
+    container_name: redis_container
+    # Equal CPU/memory budget for every store so the comparison is fair. GMT
+    # honours the native compose `cpus`/`mem_limit` keys. Only one KV container
+    # is exercised per scenario (plus the load driver, which is left
+    # unconstrained so it never bottlenecks the load generation).
+    cpus: 4
+    mem_limit: 8g
+    # ports:
+      # - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  valkey:
+    image: valkey/valkey:9.1
+    container_name: valkey_container
+    cpus: 4
+    mem_limit: 8g
+    # ports:
+      # - "6380:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  keydb:
+    # KeyDB (Snap) publishes no clean semver tags on Docker Hub; `latest` is the
+    # documented tag. Pin to a digest for a reproducible paper build.
+    image: eqalpha/keydb:latest
+    container_name: keydb_container
+    cpus: 4
+    mem_limit: 8g
+    # ports:
+      # - "6381:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "keydb-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  dragonfly:
+    # Dragonfly recommends the `latest` tag from its own registry. Pin to a
+    # digest for a reproducible paper build. Speaks RESP, ships redis-cli.
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: dragonfly_container
+    cpus: 4
+    mem_limit: 8g
+    # Dragonfly wants an unlimited memlock; without it it warns and can refuse to
+    # start on some hosts. GMT rejects the compose `ulimits` key, so pass it as a
+    # raw docker run flag (same mechanism DBMS-bench's Db2 uses for --cap-add).
+    docker-run-args:
+      - "--ulimit"
+      - "memlock=-1"
+    # ports:
+      # - "6382:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  memcached:
+    image: memcached:1.6-bookworm
+    container_name: memcached_container
+    cpus: 4
+    mem_limit: 8g
+    # Stock memcached caps itself at 64 MB (`-m 64`). Left stock for T0 on
+    # purpose: the untuned cache evicts almost the whole YCSB dataset, so the
+    # T0->T1 delta (T1 sets `-m 6144`) is the memory-sizing effect. See TUNING.md.
+    # ports:
+      # - "11211:11211"
+    healthcheck:
+      # No cli in the image; a bare TCP-open check is enough. bash ships in the
+      # debian-based image and provides /dev/tcp.
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/11211'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  postgres:
+    # PostgreSQL benchmarked *as a key-value store* via YCSB's postgrenosql
+    # binding: a single `usertable(YCSB_KEY text PK, YCSB_VALUE jsonb)`.
+    image: postgres:18.4-trixie
+    container_name: postgres_container
+    cpus: 4
+    mem_limit: 8g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    # ports:
+      # - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+# Benchmark drivers (left unconstrained; idle until GMT execs a flow command).
+
+  ycsb:
+    # Built + pushed by benchmarks/ycsb/build-image.sh. Bakes YCSB with the
+    # redis, memcached and postgrenosql bindings and idles via `sleep infinity`.
+    image: ribalba/ycsb:latest
+    container_name: ycsb_container
+
+  memtier:
+    image: redislabs/memtier_benchmark:latest
+    container_name: memtier_container
+    # The stock image's entrypoint IS memtier_benchmark, which would run once and
+    # exit. Override it to idle so GMT can exec the measured run into it.
+    entrypoint: ["sleep", "infinity"]
