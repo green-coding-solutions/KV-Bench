@@ -12,11 +12,11 @@ FROM eclipse-temurin:17-jdk-jammy
 
 ARG YCSB_VERSION=0.17.0
 
-# YCSB's bin/ycsb launcher is a Python script invoked as `python`; symlink it to
-# python3. curl fetches the release tarball.
+# The scenarios invoke `bin/ycsb.sh`, not the Python `bin/ycsb` launcher: the
+# latter is Python 2 only (`except E, err:`) and no Python 2 ships in this base
+# image. curl fetches the release tarball.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 curl ca-certificates \
-    && ln -sf /usr/bin/python3 /usr/local/bin/python \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL "https://github.com/brianfrankcooper/YCSB/releases/download/${YCSB_VERSION}/ycsb-${YCSB_VERSION}.tar.gz" \

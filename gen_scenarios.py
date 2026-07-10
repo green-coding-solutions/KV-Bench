@@ -201,7 +201,7 @@ def gen_ycsb(key: str, tier: int) -> str:
     out.append("      - type: console")
     out.append("        note: YCSB LOAD")
     out.append(
-        f"        command: ./bin/ycsb load {binding} -P workloads/workloada -P {props} "
+        f"        command: ./bin/ycsb.sh load {binding} -P workloads/workloada -P {props} "
         "2>&1 | tee /dev/stderr | grep -q '\\[OVERALL\\]'"
     )
     out.append("        shell: sh")
@@ -214,7 +214,7 @@ def gen_ycsb(key: str, tier: int) -> str:
         out.append("      - type: console")
         out.append(f"        note: YCSB RUN {letter}")
         out.append(
-            f"        command: ./bin/ycsb run {binding} -P workloads/{wl} -P {props} "
+            f"        command: ./bin/ycsb.sh run {binding} -P workloads/{wl} -P {props} "
             f"2>&1 | tee /dev/stderr | {awk}"
         )
         out.append("        shell: sh")

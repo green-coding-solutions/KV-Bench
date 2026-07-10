@@ -38,7 +38,7 @@ flow:
     commands:
       - type: console
         note: YCSB LOAD
-        command: ./bin/ycsb load postgrenosql -P workloads/workloada -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | grep -q '\[OVERALL\]'
+        command: ./bin/ycsb.sh load postgrenosql -P workloads/workloada -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | grep -q '\[OVERALL\]'
         shell: sh
         log-stdout: true
   - name: Run workload A (read-update 50-50)
@@ -46,7 +46,7 @@ flow:
     commands:
       - type: console
         note: YCSB RUN A
-        command: ./bin/ycsb run postgrenosql -P workloads/workloada -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
+        command: ./bin/ycsb.sh run postgrenosql -P workloads/workloada -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
         shell: sh
         log-stdout: true
         read-sci-stdout: true
@@ -55,7 +55,7 @@ flow:
     commands:
       - type: console
         note: YCSB RUN B
-        command: ./bin/ycsb run postgrenosql -P workloads/workloadb -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
+        command: ./bin/ycsb.sh run postgrenosql -P workloads/workloadb -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
         shell: sh
         log-stdout: true
         read-sci-stdout: true
@@ -64,7 +64,7 @@ flow:
     commands:
       - type: console
         note: YCSB RUN C
-        command: ./bin/ycsb run postgrenosql -P workloads/workloadc -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
+        command: ./bin/ycsb.sh run postgrenosql -P workloads/workloadc -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
         shell: sh
         log-stdout: true
         read-sci-stdout: true
@@ -73,7 +73,7 @@ flow:
     commands:
       - type: console
         note: YCSB RUN F
-        command: ./bin/ycsb run postgrenosql -P workloads/workloadf -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
+        command: ./bin/ycsb.sh run postgrenosql -P workloads/workloadf -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
         shell: sh
         log-stdout: true
         read-sci-stdout: true
@@ -82,7 +82,7 @@ flow:
     commands:
       - type: console
         note: YCSB RUN D
-        command: ./bin/ycsb run postgrenosql -P workloads/workloadd -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
+        command: ./bin/ycsb.sh run postgrenosql -P workloads/workloadd -P /tmp/repo/db/pg/ycsb/pg_ycsb.properties 2>&1 | tee /dev/stderr | awk '/\[OVERALL\], RunTime\(ms\)/{rt=$NF} /\[OVERALL\], Throughput\(ops\/sec\)/{tp=$NF} END{if(tp!=""){ops=int(rt/1000*tp+0.5);"date +%s"|getline ts;printf("%s000000 ycsb_ops=%s\n",ts,ops)}}'
         shell: sh
         log-stdout: true
         read-sci-stdout: true
