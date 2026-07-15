@@ -6,18 +6,25 @@
 #   ./benchmarks/ycsb/build-image.sh                 # latest YCSB (0.17.0)
 #   YCSB_VERSION=0.17.0 ./benchmarks/ycsb/build-image.sh
 #
+# The cluster runs x86_64, so we build for linux/amd64 via buildx — this builds
+# correctly even from an Apple Silicon Mac (Docker Desktop bundles the QEMU
+# emulation). Override PLATFORM to target a different arch. buildx pushes the
+# result directly to the registry (a cross-arch image can't be run locally).
+#
 # Pin a version for a reproducible paper build.
 set -eu
 
 IMAGE="${IMAGE:-ribalba/ycsb:latest}"
 YCSB_VERSION="${YCSB_VERSION:-0.17.0}"
+PLATFORM="${PLATFORM:-linux/amd64}"
 
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
-docker build \
+docker buildx build \
+  --platform "${PLATFORM}" \
   --build-arg "YCSB_VERSION=${YCSB_VERSION}" \
   -t "${IMAGE}" \
+  --push \
   "${DIR}"
 
-docker push "${IMAGE}"
-echo "pushed ${IMAGE} (YCSB ${YCSB_VERSION})"
+echo "pushed ${IMAGE} (YCSB ${YCSB_VERSION}, ${PLATFORM})"
