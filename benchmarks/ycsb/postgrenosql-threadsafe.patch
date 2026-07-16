@@ -1,0 +1,145 @@
+Make YCSB's postgrenosql binding thread-safe (one connection per client thread).
+
+Upstream YCSB (all versions through 0.17.0) declares the JDBC connection and the
+prepared-statement cache as *static* in PostgreNoSQLDBClient:
+
+    private static ConcurrentMap<StatementType, PreparedStatement> cachedStatements;
+    private static Connection connection;
+
+YCSB hands every client thread its own DB instance, but `static` defeats that: all
+threads end up sharing ONE Connection and ONE PreparedStatement per statement type.
+init() compounds it by returning early for every thread after the first. The
+operation methods then do, with no synchronization:
+
+    insertStatement.setObject(2, object);
+    insertStatement.setString(1, key);
+    insertStatement.executeUpdate();
+
+With threadcount > 1 the threads interleave parameter writes on that shared
+statement and corrupt the JDBC protocol stream. Measured against postgres:18.4 with
+KV-Bench's threadcount=8 (recordcount=1000): 0 of 1000 rows loaded, failing with
+"invalid message format", "duplicate key value violates unique constraint" (one
+thread's key overwritten by another before execute) and "This connection has been
+closed". With threadcount=1 the same load inserts 1000/1000. Reproduces identically
+on postgres 16, 17 and 18, so it is the binding and not the server.
+
+This matters beyond a crash: YCSB still prints [OVERALL] when every operation
+errors, so a totally failed load looks like a successful one. The run phases then
+measure error paths against an empty table -- and the per-op LOG.error calls emit
+~170 bytes each, which is what pushed a full run's logs past Postgres's 256 MB
+jsonb ceiling in GMT.
+
+The fix drops `static` from the three fields so each thread's DB instance opens and
+owns its own connection, and removes the early-return so every instance actually
+initialises. cleanup() becomes per-instance (closing each thread's connection)
+rather than only acting on the last thread, which would otherwise leak 7 of 8.
+
+One behavioural change beyond thread-safety: init() now rethrows as DBException
+instead of only logging. Upstream swallows a failed connect, leaving connection ==
+null so every subsequent op NPEs into the same log flood. Failing loudly at startup
+is the point of this exercise. Drop that one hunk line if you want a strictly
+minimal diff.
+
+Applies to: YCSB 0.17.0
+  postgrenosql/src/main/java/site/ycsb/postgrenosql/PostgreNoSQLDBClient.java
+Upstream issue: the binding has never been safe for threadcount > 1.
+
+--- a/postgrenosql/src/main/java/site/ycsb/postgrenosql/PostgreNoSQLDBClient.java
++++ b/postgrenosql/src/main/java/site/ycsb/postgrenosql/PostgreNoSQLDBClient.java
+@@ -45,14 +45,15 @@
+   /** Count the number of times initialized to teardown on the last. */
+   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+
+-  /** Cache for already prepared statements. */
+-  private static ConcurrentMap<StatementType, PreparedStatement> cachedStatements;
++  /** Cache for already prepared statements. Per-instance: YCSB gives each client
++   *  thread its own DB object, so the statements below are never shared. */
++  private ConcurrentMap<StatementType, PreparedStatement> cachedStatements;
+
+   /** The driver to get the connection to postgresql. */
+-  private static Driver postgrenosqlDriver;
++  private Driver postgrenosqlDriver;
+
+-  /** The connection to the database. */
+-  private static Connection connection;
++  /** The connection to the database. Per-instance, i.e. one connection per client thread. */
++  private Connection connection;
+
+   /** The class to use as the jdbc driver. */
+   public static final String DRIVER_CLASS = "db.driver";
+@@ -89,49 +90,48 @@
+   @Override
+   public void init() throws DBException {
+     INIT_COUNT.incrementAndGet();
+-    synchronized (PostgreNoSQLDBClient.class) {
+-      if (postgrenosqlDriver != null) {
+-        return;
+-      }
+
+-      Properties props = getProperties();
+-      String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
+-      String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
+-      String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
+-      boolean autoCommit = getBoolProperty(props, JDBC_AUTO_COMMIT, true);
++    Properties props = getProperties();
++    String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
++    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
++    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
++    boolean autoCommit = getBoolProperty(props, JDBC_AUTO_COMMIT, true);
+
+-      try {
+-        Properties tmpProps = new Properties();
+-        tmpProps.setProperty("user", user);
+-        tmpProps.setProperty("password", passwd);
++    try {
++      Properties tmpProps = new Properties();
++      tmpProps.setProperty("user", user);
++      tmpProps.setProperty("password", passwd);
+
+-        cachedStatements = new ConcurrentHashMap<>();
++      cachedStatements = new ConcurrentHashMap<>();
++
++      postgrenosqlDriver = new Driver();
++      connection = postgrenosqlDriver.connect(urls, tmpProps);
++      connection.setAutoCommit(autoCommit);
+
+-        postgrenosqlDriver = new Driver();
+-        connection = postgrenosqlDriver.connect(urls, tmpProps);
+-        connection.setAutoCommit(autoCommit);
+-
+-      } catch (Exception e) {
+-        LOG.error("Error during initialization: " + e);
+-      }
++    } catch (Exception e) {
++      LOG.error("Error during initialization: " + e);
++      throw new DBException(e);
+     }
+   }
+
+   @Override
+   public void cleanup() throws DBException {
+-    if (INIT_COUNT.decrementAndGet() == 0) {
+-      try {
++    INIT_COUNT.decrementAndGet();
++    try {
++      if (cachedStatements != null) {
+         cachedStatements.clear();
+-
++      }
++      if (connection != null) {
+         if (!connection.getAutoCommit()){
+           connection.commit();
+         }
+         connection.close();
+-      } catch (SQLException e) {
+-        System.err.println("Error in cleanup execution. " + e);
++        connection = null;
+       }
+-      postgrenosqlDriver = null;
++    } catch (SQLException e) {
++      System.err.println("Error in cleanup execution. " + e);
+     }
++    postgrenosqlDriver = null;
+   }
+
+   @Override
